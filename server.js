@@ -36,7 +36,7 @@ app.use((req, res, next) => {
       console.error("Missing API key in request body");
       return res.status(400).json({ error: 'Missing API key' });
     }
-    if (req.body.key !== 'JCvVqYz4imo6ibtQVxsVwmoSKDTXNCDD') {
+    if (req.body.key !== '233fe4a75da14b18b6def809b81549b1') {
       console.error("Invalid API key");
       return res.status(403).json({ error: 'Invalid API key' });
     }
