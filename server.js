@@ -18,47 +18,53 @@ const io = new Server(server, {
 
 const PORT = 3000;
 
-app.use(cors());
+// Middleware: Ensure proper request body parsing
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(cors());
 
-// Add API key middleware
+// Debugging Middleware: Log all requests
+app.use((req, res, next) => {
+  console.log(`Incoming request: ${req.method} ${req.path}`, req.body);
+  next();
+});
+
+// API Key Middleware
 app.use((req, res, next) => {
   if (req.path === '/dropTreat' && req.method === 'POST') {
-    const apiKey = req.body.key;
-    if (apiKey !== 'JCvVqYz4imo6ibtQVxsVwmoSKDTXNCDD') {
+    if (!req.body || !req.body.key) {
+      console.error("Missing API key in request body");
+      return res.status(400).json({ error: 'Missing API key' });
+    }
+    if (req.body.key !== 'JCvVqYz4imo6ibtQVxsVwmoSKDTXNCDD') {
+      console.error("Invalid API key");
       return res.status(403).json({ error: 'Invalid API key' });
     }
   }
   next();
 });
 
-// Modified treat drop endpoint
-app.post('/dropTreat', async (req, res) => {
+// Treat Drop Endpoint
+app.post('/dropTreat', (req, res) => {
   try {
     const source = req.body.source || 'unknown';
     console.log(`Treat drop requested from: ${source}`);
     
-    // Broadcast to all connected clients
+    // Emit event to WebSocket clients
     io.emit('treatDropped', { 
       message: 'A treat has been dropped!',
       source: source,
       timestamp: new Date().toISOString()
     });
     
-    res.status(200).json({
-      success: true,
-      message: 'Treat drop signal sent'
-    });
+    res.status(200).json({ success: true, message: 'Treat drop signal sent' });
   } catch (error) {
     console.error('Error processing treat drop:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to process treat drop'
-    });
+    res.status(500).json({ success: false, message: 'Failed to process treat drop' });
   }
 });
 
-// WebSocket connection handling
+// WebSocket Connection Handling
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
   
@@ -67,6 +73,7 @@ io.on('connection', (socket) => {
   });
 });
 
+// Start Server
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
