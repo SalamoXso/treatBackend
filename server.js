@@ -31,24 +31,35 @@ app.use((req, res, next) => {
 
 // API Key Middleware
 // Updated API Key Middleware
+// Updated authentication middleware
 app.use((req, res, next) => {
   if (req.path === '/dropTreat' && req.method === 'POST') {
-    // Check all possible key locations
-    const providedKey = req.body?.key || 
-                      req.body?.api_key ||
-                      req.body?.token ||
-                      req.headers['x-api-key'] ||
-                      req.headers['authorization']?.replace('Bearer ', '') ||
-                      req.headers['x-auth-token'];
-
-    if (!providedKey) {
-      console.error("Missing API key");
-      return res.status(400).json({ error: 'Missing API key' });
+    console.log('\n=== INCOMING REQUEST ===');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    
+    const receivedKey = req.body?.key || req.headers['x-api-key'];
+    const expectedKey = process.env.API_KEY || 'JCvQYz4imo6ibtQVxsVwmoSKDTXNCDD';
+    
+    console.log(`Key Comparison: "${receivedKey}" === "${expectedKey}" -> ${receivedKey === expectedKey}`);
+    console.log(`Key Lengths: ${receivedKey?.length} vs ${expectedKey.length}`);
+    
+    if (!receivedKey) {
+      return res.status(400).json({ 
+        error: 'Missing API key',
+        received: req.body,
+        headers: req.headers
+      });
     }
-
-    if (providedKey !== 'JCvVqYz4imo6ibtQVxsVwmoSKDTXNCDD') {
-      console.error("Invalid API key provided:", providedKey);
-      return res.status(403).json({ error: 'Invalid API key' });
+    
+    if (receivedKey !== expectedKey) {
+      return res.status(403).json({
+        error: 'Invalid API key',
+        expectedLength: expectedKey.length,
+        receivedLength: receivedKey.length,
+        receivedKey: receivedKey,
+        charCodes: receivedKey.split('').map(c => c.charCodeAt(0))
+      });
     }
   }
   next();
@@ -86,4 +97,6 @@ io.on('connection', (socket) => {
 // Start Server
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
+  // In your server.js authentication middleware:
+console.log("Expected API Key:", process.env.API_KEY || 'JCvQYz4imo6ibtQVxsVwmoSKDTXNCDD');
 });
