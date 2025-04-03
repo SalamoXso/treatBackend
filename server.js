@@ -30,14 +30,24 @@ app.use((req, res, next) => {
 });
 
 // API Key Middleware
+// Updated API Key Middleware
 app.use((req, res, next) => {
   if (req.path === '/dropTreat' && req.method === 'POST') {
-    if (!req.body || !req.body.key) {
-      console.error("Missing API key in request body");
+    // Check all possible key locations
+    const providedKey = req.body?.key || 
+                      req.body?.api_key ||
+                      req.body?.token ||
+                      req.headers['x-api-key'] ||
+                      req.headers['authorization']?.replace('Bearer ', '') ||
+                      req.headers['x-auth-token'];
+
+    if (!providedKey) {
+      console.error("Missing API key");
       return res.status(400).json({ error: 'Missing API key' });
     }
-    if (req.body.key !== '233fe4a75da14b18b6def809b81549b1') {
-      console.error("Invalid API key");
+
+    if (providedKey !== 'JCvVqYz4imo6ibtQVxsVwmoSKDTXNCDD') {
+      console.error("Invalid API key provided:", providedKey);
       return res.status(403).json({ error: 'Invalid API key' });
     }
   }
