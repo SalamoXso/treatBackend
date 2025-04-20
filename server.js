@@ -19,109 +19,81 @@ const io = new Server(server, {
 
 const PORT = 3000;
 
-// Middleware: Ensure proper request body parsing
+// Middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors());
 
-// Debugging Middleware: Log all requests
+// Debugging Middleware
 app.use((req, res, next) => {
-  console.log(`Incoming request: ${req.method} ${req.path}`, req.body);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
 // API Key Middleware
-// Updated API Key Middleware
-// Updated authentication middleware
 app.use((req, res, next) => {
   if (req.path === '/dropTreat' && req.method === 'POST') {
-    console.log('Raw Body:', req.body); // Add this line
-    console.log('Headers:', req.headers);
-    console.log('\n=== INCOMING REQUEST ===');
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body:', JSON.stringify(req.body, null, 2));
-    
     const receivedKey = req.body?.key || req.headers['x-api-key'];
     const expectedKey = process.env.API_KEY || 'JCvQYz4imo6ibtQVxsVwmoSKDTXNCDD';
     
-    console.log(`Key Comparison: "${receivedKey}" === "${expectedKey}" -> ${receivedKey === expectedKey}`);
-    console.log(`Key Lengths: ${receivedKey?.length} vs ${expectedKey.length}`);
-    
-    if (!receivedKey) {
-      return res.status(400).json({ 
-        error: 'Missing API key',
-        received: req.body,
-        headers: req.headers
-      });
-    }
-    
-    if (receivedKey !== expectedKey) {
-      return res.status(403).json({
-        error: 'Invalid API key',
-        expectedLength: expectedKey.length,
-        receivedLength: receivedKey.length,
-        receivedKey: receivedKey,
-        charCodes: receivedKey.split('').map(c => c.charCodeAt(0))
-      });
+    if (!receivedKey || receivedKey !== expectedKey) {
+      return res.status(403).json({ error: 'Invalid API key' });
     }
   }
   next();
 });
 
 // Treat Drop Endpoint
-// In your /dropTreat endpoint:
 app.post('/dropTreat', async (req, res) => {
   try {
-    const source = req.body?.source || 'system'; // Fixed undefined source
-    
-    // WebSocket notification
-    io.emit('treatDropped', { 
-      message: 'Treat dispensed!',
-      source: source,
-      timestamp: new Date().toISOString()
+    const source = req.body?.source || 'system';
+    const entityId = 'switch.sonoff_s40lite'; // Confirm this in HA
+
+    // 1. Turn ON the plug
+    await callHAService('switch.turn_on', {
+      entity_id: entityId
     });
 
-    // HA Webhook with error handling
-    try {
-      await axios.post(
-        `${process.env.HA_URL}/api/webhook/treat_dispensed`,
-        { source: source }, // Send source to HA
-        { 
-          headers: { 
-            Authorization: `Bearer ${process.env.HA_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 3000 // 3-second timeout
-        }
-      );
-    } catch (haError) {
-      console.error('HA Webhook failed:', haError.message);
-      // Continue even if HA fails
-    }
+    // 2. Wait 3 seconds
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
-    res.status(200).json({ success: true });
+    // 3. Turn OFF the plug
+    await callHAService('switch.turn_off', {
+      entity_id: entityId
+    });
+
+    res.json({ success: true });
   } catch (error) {
     console.error('Treat drop failed:', error);
     res.status(500).json({ 
-      success: false, 
-      error: error.message,
-      tip: "Include {'source':'your_source'} in request body"
+      success: false,
+      error: error.message
     });
   }
 });
 
-// WebSocket Connection Handling
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-  
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
-});
+// Helper function for HA service calls
+async function callHAService(service, data) {
+  try {
+    const response = await axios.post(
+      `${process.env.HA_URL}/api/services/${service.replace('.', '/')}`,
+      data,
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.HA_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error(`HA Service ${service} failed:`, error.response?.data || error.message);
+    throw error;
+  }
+}
 
 // Start Server
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  // In your server.js authentication middleware:
-console.log("Expected API Key:", process.env.API_KEY || 'JCvQYz4imo6ibtQVxsVwmoSKDTXNCDD');
 });
