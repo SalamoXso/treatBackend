@@ -67,28 +67,44 @@ app.use((req, res, next) => {
 });
 
 // Treat Drop Endpoint
+// In your /dropTreat endpoint:
 app.post('/dropTreat', async (req, res) => {
   try {
-    const source = req.body.source || 'unknown';
+    const source = req.body?.source || 'system'; // Fixed undefined source
     
-    // 1. Send to WebSocket (existing)
+    // WebSocket notification
     io.emit('treatDropped', { 
-      message: 'A treat has been dropped!',
+      message: 'Treat dispensed!',
       source: source,
       timestamp: new Date().toISOString()
     });
-    
-    // 2. Trigger HA smart plug (new)
-    await axios.post(
-      `${process.env.HA_URL}/api/webhook/treat_dispensed`,
-      {},
-      { headers: { Authorization: `Bearer ${process.env.HA_TOKEN}` } }
-    );
-    
+
+    // HA Webhook with error handling
+    try {
+      await axios.post(
+        `${process.env.HA_URL}/api/webhook/treat_dispensed`,
+        { source: source }, // Send source to HA
+        { 
+          headers: { 
+            Authorization: `Bearer ${process.env.HA_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 3000 // 3-second timeout
+        }
+      );
+    } catch (haError) {
+      console.error('HA Webhook failed:', haError.message);
+      // Continue even if HA fails
+    }
+
     res.status(200).json({ success: true });
   } catch (error) {
     console.error('Treat drop failed:', error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      tip: "Include {'source':'your_source'} in request body"
+    });
   }
 });
 
