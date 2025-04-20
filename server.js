@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
+const axios = require('axios');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -66,22 +67,28 @@ app.use((req, res, next) => {
 });
 
 // Treat Drop Endpoint
-app.post('/dropTreat', (req, res) => {
+app.post('/dropTreat', async (req, res) => {
   try {
     const source = req.body.source || 'unknown';
-    console.log(`Treat drop requested from: ${source}`);
     
-    // Emit event to WebSocket clients
+    // 1. Send to WebSocket (existing)
     io.emit('treatDropped', { 
       message: 'A treat has been dropped!',
       source: source,
       timestamp: new Date().toISOString()
     });
     
-    res.status(200).json({ success: true, message: 'Treat drop signal sent' });
+    // 2. Trigger HA smart plug (new)
+    await axios.post(
+      `${process.env.HA_URL}/api/webhook/treat_dispensed`,
+      {},
+      { headers: { Authorization: `Bearer ${process.env.HA_TOKEN}` } }
+    );
+    
+    res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Error processing treat drop:', error);
-    res.status(500).json({ success: false, message: 'Failed to process treat drop' });
+    console.error('Treat drop failed:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
