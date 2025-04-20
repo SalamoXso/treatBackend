@@ -35,6 +35,8 @@ app.use((req, res, next) => {
 // Updated authentication middleware
 app.use((req, res, next) => {
   if (req.path === '/dropTreat' && req.method === 'POST') {
+    console.log('Raw Body:', req.body); // Add this line
+    console.log('Headers:', req.headers);
     console.log('\n=== INCOMING REQUEST ===');
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
     console.log('Body:', JSON.stringify(req.body, null, 2));
